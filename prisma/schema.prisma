@@ -1,0 +1,523 @@
+// Luxury Retailer Inventory Management System
+// Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  WAREHOUSE_MANAGER
+  STORE_MANAGER
+  ANALYST
+}
+
+enum LocationType {
+  WAREHOUSE
+  STORE
+}
+
+enum RevenueTier {
+  A
+  B
+  C
+}
+
+enum MovementType {
+  SALE
+  RETURN
+  TRANSFER_OUT
+  TRANSFER_IN
+  PURCHASE_RECEIPT
+  ADJUSTMENT
+  COUNT_CORRECTION
+  DAMAGE_WRITE_OFF
+  INITIAL_STOCK
+}
+
+enum TransferOrderStatus {
+  DRAFT
+  REQUESTED
+  APPROVED
+  IN_TRANSIT
+  PARTIALLY_RECEIVED
+  COMPLETED
+  CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  CONFIRMED
+  PARTIALLY_RECEIVED
+  COMPLETED
+  CANCELLED
+}
+
+enum AlertType {
+  LOW_STOCK
+  STOCKOUT
+  OVERSTOCK
+  REORDER_TRIGGERED
+  DELAYED_SHIPMENT
+  TRANSFER_OVERDUE
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum ForecastMethod {
+  MOVING_AVG_12W
+  EXP_SMOOTH
+  MANUAL
+  HOLT_WINTERS
+  CROSTON_SBC
+  ENSEMBLE
+}
+
+// ---------------------------------------------------------------------------
+// Auth (NextAuth v4 adapter tables)
+// ---------------------------------------------------------------------------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Users
+// ---------------------------------------------------------------------------
+
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  name       String
+  password   String?  // hashed; null for OAuth users
+  role       Role     @default(STORE_MANAGER)
+  locationId String?  // scoped location for STORE_MANAGER / WAREHOUSE_MANAGER
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  location                Location?       @relation("UserLocation", fields: [locationId], references: [id])
+  managedLocations        Location[]      @relation("LocationManager")
+  accounts                Account[]
+  sessions                Session[]
+  stockMovements          StockMovement[]
+  transferOrdersRequested TransferOrder[] @relation("TransferRequester")
+  transferOrdersApproved  TransferOrder[] @relation("TransferApprover")
+  purchaseOrdersCreated   PurchaseOrder[] @relation("PurchaseOrderCreator")
+  alertsResolved          Alert[]         @relation("AlertResolver")
+}
+
+// ---------------------------------------------------------------------------
+// Suppliers
+// ---------------------------------------------------------------------------
+
+model Supplier {
+  id              String   @id @default(cuid())
+  name            String
+  contactEmail    String?
+  contactPhone    String?
+  country         String
+  currency        String   @default("EUR") // ISO 4217 — supplier invoices in this currency
+  defaultLeadDays Int      @default(30)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
+}
+
+// ---------------------------------------------------------------------------
+// Locations  (1 warehouse + 20 stores)
+// ---------------------------------------------------------------------------
+
+model Location {
+  id          String       @id @default(cuid())
+  code        String       @unique // "WH-CENTRAL", "STORE-PAR", "STORE-NYC"
+  name        String
+  type        LocationType
+  city        String
+  country     String
+  timezone    String       @default("UTC")
+  currency    String       @default("USD") // local operating currency
+  revenueTier RevenueTier  @default(B)
+  isActive    Boolean      @default(true)
+  managerId   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  manager            User?            @relation("LocationManager", fields: [managerId], references: [id])
+  staff              User[]           @relation("UserLocation")
+  inventoryLevels    InventoryLevel[]
+  movementsFrom      StockMovement[]  @relation("MovementFrom")
+  movementsTo        StockMovement[]  @relation("MovementTo")
+  transferOrdersFrom TransferOrder[]  @relation("TransferFrom")
+  transferOrdersTo   TransferOrder[]  @relation("TransferTo")
+  purchaseOrders     PurchaseOrder[]
+  demandForecasts    DemandForecast[]
+  alerts             Alert[]
+  costRecords        CostRecord[]
+}
+
+// ---------------------------------------------------------------------------
+// Products & Variants
+// ---------------------------------------------------------------------------
+
+model Product {
+  id          String   @id @default(cuid())
+  sku         String   @unique
+  name        String
+  brand       String
+  category    String   // "Handbag", "Watch", "Shoes", "Jewellery"
+  subcategory String?
+  description String?  @db.Text
+  attributes  Json     @default("{}") // flexible per-category attributes
+  unitCost    Decimal  @db.Decimal(10, 2)
+  retailPrice Decimal  @db.Decimal(10, 2)
+  currency    String   @default("EUR")
+  weightKg    Decimal? @db.Decimal(6, 3)
+
+  // Replenishment parameters (system-computed; overridable)
+  supplierId            String
+  leadTimeDays          Int     @default(30)
+  reorderPoint          Int     @default(0)
+  safetyStock           Int     @default(0)
+  manualReorderOverride Boolean @default(false)
+  manualSafetyOverride  Boolean @default(false)
+
+  // Carrying cost override (if null, uses CategoryCarryingRate.annualRate)
+  annualCarryingRateOverride Decimal? @db.Decimal(5, 4)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  supplier Supplier         @relation(fields: [supplierId], references: [id])
+  variants ProductVariant[]
+
+  @@index([supplierId])
+  @@index([brand, category])
+}
+
+model ProductVariant {
+  id         String   @id @default(cuid())
+  productId  String
+  sku        String   @unique // variant-level SKU
+  size       String?
+  color      String?
+  attributes Json     @default("{}") // overrides / extends parent
+  unitCost   Decimal? @db.Decimal(10, 2) // null → inherits from Product
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  product         Product             @relation(fields: [productId], references: [id])
+  inventoryLevels InventoryLevel[]
+  stockMovements  StockMovement[]
+  transferLines   TransferOrderLine[]
+  purchaseLines   PurchaseOrderLine[]
+  demandForecasts DemandForecast[]
+  alerts          Alert[]
+  costRecords     CostRecord[]
+
+  @@index([productId])
+}
+
+// ---------------------------------------------------------------------------
+// Inventory Levels
+// Materialized stock snapshot — NEVER written directly by application code.
+// All mutations go through the record_stock_movement() PostgreSQL function
+// which atomically writes a StockMovement row AND updates this table.
+// ---------------------------------------------------------------------------
+
+model InventoryLevel {
+  id                String    @id @default(cuid())
+  locationId        String
+  productVariantId  String
+  quantityOnHand    Int       @default(0)
+  quantityReserved  Int       @default(0) // allocated to approved TOs, not yet shipped
+  quantityInTransit Int       @default(0) // shipped from source, not yet arrived here
+  // quantityAvailable = onHand - reserved  (computed in application/DB view layer)
+  lastCountedAt     DateTime?
+  updatedAt         DateTime  @updatedAt
+
+  location       Location       @relation(fields: [locationId], references: [id])
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+
+  @@unique([locationId, productVariantId])
+  @@index([locationId])
+  @@index([productVariantId])
+}
+
+// ---------------------------------------------------------------------------
+// Stock Movements  (immutable ledger — append-only)
+// InventoryLevel can always be fully reconstructed by replaying this table.
+// ---------------------------------------------------------------------------
+
+model StockMovement {
+  id               String       @id @default(cuid())
+  type             MovementType
+  productVariantId String
+  fromLocationId   String?      // null for supplier → warehouse
+  toLocationId     String?      // null for store → customer (sale)
+  quantity         Int          // always positive; direction encoded in `type`
+  unitCost         Decimal      @db.Decimal(10, 2)
+  referenceType    String?      // "TransferOrder" | "PurchaseOrder"
+  referenceId      String?      // ID of the originating order
+  notes            String?      @db.Text
+  performedById    String
+  occurredAt       DateTime     @default(now()) // business timestamp (not DB insert time)
+  createdAt        DateTime     @default(now())
+
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+  fromLocation   Location?      @relation("MovementFrom", fields: [fromLocationId], references: [id])
+  toLocation     Location?      @relation("MovementTo", fields: [toLocationId], references: [id])
+  performedBy    User           @relation(fields: [performedById], references: [id])
+
+  @@index([productVariantId, occurredAt])
+  @@index([fromLocationId, occurredAt])
+  @@index([toLocationId, occurredAt])
+  @@index([type, occurredAt])
+  @@index([referenceId])
+}
+
+// ---------------------------------------------------------------------------
+// Transfer Orders  (warehouse ↔ store, store ↔ store)
+// ---------------------------------------------------------------------------
+
+model TransferOrder {
+  id              String              @id @default(cuid())
+  orderNumber     String              @unique // "TO-2024-000142"
+  status          TransferOrderStatus @default(DRAFT)
+  fromLocationId  String
+  toLocationId    String
+  requestedById   String
+  approvedById    String?
+  expectedArrival DateTime?
+  actualArrival   DateTime?
+  notes           String?             @db.Text
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  fromLocation Location            @relation("TransferFrom", fields: [fromLocationId], references: [id])
+  toLocation   Location            @relation("TransferTo", fields: [toLocationId], references: [id])
+  requestedBy  User                @relation("TransferRequester", fields: [requestedById], references: [id])
+  approvedBy   User?               @relation("TransferApprover", fields: [approvedById], references: [id])
+  lines        TransferOrderLine[]
+
+  @@index([status])
+  @@index([fromLocationId])
+  @@index([toLocationId])
+}
+
+model TransferOrderLine {
+  id                String @id @default(cuid())
+  transferOrderId   String
+  productVariantId  String
+  quantityRequested Int
+  quantityShipped   Int    @default(0)
+  quantityReceived  Int    @default(0)
+  unitCost          Decimal @db.Decimal(10, 2)
+
+  transferOrder  TransferOrder  @relation(fields: [transferOrderId], references: [id], onDelete: Cascade)
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+
+  @@index([transferOrderId])
+  @@index([productVariantId])
+}
+
+// ---------------------------------------------------------------------------
+// Purchase Orders  (supplier → warehouse)
+// ---------------------------------------------------------------------------
+
+model PurchaseOrder {
+  id              String              @id @default(cuid())
+  orderNumber     String              @unique // "PO-2024-000089"
+  status          PurchaseOrderStatus @default(DRAFT)
+  supplierId      String
+  destinationId   String              // almost always the warehouse location
+  expectedArrival DateTime?
+  actualArrival   DateTime?
+  totalCost       Decimal             @db.Decimal(12, 2) @default(0)
+  currency        String              @default("EUR")
+  createdById     String
+  notes           String?             @db.Text
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  supplier    Supplier           @relation(fields: [supplierId], references: [id])
+  destination Location           @relation(fields: [destinationId], references: [id])
+  createdBy   User               @relation("PurchaseOrderCreator", fields: [createdById], references: [id])
+  lines       PurchaseOrderLine[]
+
+  @@index([status])
+  @@index([supplierId])
+  @@index([destinationId])
+}
+
+model PurchaseOrderLine {
+  id               String  @id @default(cuid())
+  purchaseOrderId  String
+  productVariantId String
+  quantityOrdered  Int
+  quantityReceived Int     @default(0)
+  unitCost         Decimal @db.Decimal(10, 2)
+  currency         String  @default("EUR")
+
+  purchaseOrder  PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([productVariantId])
+}
+
+// ---------------------------------------------------------------------------
+// Demand Forecasts
+// ---------------------------------------------------------------------------
+
+model DemandForecast {
+  id               String         @id @default(cuid())
+  productVariantId String
+  locationId       String
+  periodStart      DateTime       @db.Date // Monday of the forecast week
+  periodEnd        DateTime       @db.Date // Sunday
+  forecastedDemand Decimal        @db.Decimal(8, 2)
+  actualDemand     Int?           // filled retrospectively for accuracy tracking
+  forecastMethod   ForecastMethod @default(MOVING_AVG_12W)
+  confidenceLow    Decimal?       @db.Decimal(8, 2)
+  confidenceHigh   Decimal?       @db.Decimal(8, 2)
+  generatedAt      DateTime       @default(now())
+  mapeScore        Decimal?       @db.Decimal(6, 4) // retrospective MAPE; populated by ENSEMBLE
+
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+  location       Location       @relation(fields: [locationId], references: [id])
+
+  @@unique([productVariantId, locationId, periodStart])
+  @@index([productVariantId, locationId, periodStart])
+}
+
+// ---------------------------------------------------------------------------
+// Alerts
+// ---------------------------------------------------------------------------
+
+model Alert {
+  id               String        @id @default(cuid())
+  type             AlertType
+  severity         AlertSeverity @default(WARNING)
+  productVariantId String?
+  locationId       String?
+  referenceId      String?       // optional FK to PO or TO
+  referenceType    String?
+  message          String        @db.Text
+  isRead           Boolean       @default(false)
+  isResolved       Boolean       @default(false)
+  resolvedById     String?
+  resolvedAt       DateTime?
+  createdAt        DateTime      @default(now())
+
+  productVariant ProductVariant? @relation(fields: [productVariantId], references: [id])
+  location       Location?       @relation(fields: [locationId], references: [id])
+  resolvedBy     User?           @relation("AlertResolver", fields: [resolvedById], references: [id])
+
+  @@index([isResolved, severity, createdAt])
+  @@index([productVariantId])
+  @@index([locationId])
+}
+
+// ---------------------------------------------------------------------------
+// Cost Records  (nightly carrying cost snapshots)
+// ---------------------------------------------------------------------------
+
+model CostRecord {
+  id                 String   @id @default(cuid())
+  date               DateTime @db.Date
+  productVariantId   String
+  locationId         String
+  quantityOnHand     Int
+  unitCost           Decimal  @db.Decimal(10, 2)
+  annualCarryingRate Decimal  @db.Decimal(5, 4) // e.g. 0.25 = 25% p.a.
+  dailyCarryingCost  Decimal  @db.Decimal(10, 4) // onHand * unitCost * (rate / 365)
+  createdAt          DateTime @default(now())
+
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+  location       Location       @relation(fields: [locationId], references: [id])
+
+  @@unique([date, productVariantId, locationId])
+  @@index([date])
+  @@index([productVariantId])
+  @@index([locationId])
+}
+
+// ---------------------------------------------------------------------------
+// Exchange Rates  (daily snapshots for multi-currency PO reporting)
+// ---------------------------------------------------------------------------
+
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  date         DateTime @db.Date
+  fromCurrency String   // ISO 4217 e.g. "EUR"
+  toCurrency   String   // ISO 4217 e.g. "USD"
+  rate         Decimal  @db.Decimal(12, 6)
+  createdAt    DateTime @default(now())
+
+  @@unique([date, fromCurrency, toCurrency])
+  @@index([date])
+}
+
+// ---------------------------------------------------------------------------
+// Category Carrying Cost Rates
+// Default annual carrying rate used when Product.annualCarryingRateOverride is null
+// ---------------------------------------------------------------------------
+
+model CategoryCarryingRate {
+  id         String   @id @default(cuid())
+  category   String   @unique // "Handbag", "Watch", "Shoes", "Jewellery"
+  annualRate Decimal  @db.Decimal(5, 4) // e.g. 0.25 = 25%
+  updatedAt  DateTime @updatedAt
+}

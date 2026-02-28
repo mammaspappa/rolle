@@ -1,0 +1,9 @@
+
+  Admin login for when the app is ready:
+  - Email: admin@rolle.com
+  - Password: admin123
+
+  Going forward, every time you restart your computer:
+  cd /home/localuser/Rolle
+  sg docker "docker compose up -d"   # start the database
+  npm run dev                         # start the app
