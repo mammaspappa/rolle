@@ -2,8 +2,10 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Allow dev server to be accessed from other machines on the network
-  allowedDevOrigins: ["*"],
+  // Allow dev server to be accessed from other machines on the network.
+  // Next.js 14 does not support wildcards here — list specific IPs/hosts.
+  // Add your machine's IP if it changes.
+  allowedDevOrigins: ["91.223.169.40"],
 };
 
 export default withSentryConfig(nextConfig, {
