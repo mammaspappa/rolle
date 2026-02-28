@@ -22,7 +22,10 @@ export default async function AdjustmentsPage() {
         <h1 className="text-2xl font-semibold text-slate-900">Stock Adjustment</h1>
         <p className="text-sm text-slate-500 mt-1">Manually correct stock levels. All adjustments are logged in the movement history.</p>
       </div>
-      <AdjustmentForm locations={locations} variants={variants} />
+      <AdjustmentForm
+    locations={locations}
+    variants={variants.map((v) => ({ ...v, product: { ...v.product, unitCost: Number(v.product.unitCost) } }))}
+  />
     </div>
   );
 }

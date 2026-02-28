@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle } from "lucide-react";
 
 type Location = { id: string; code: string; name: string };
-type Variant = { id: string; sku: string; color: string | null; size: string | null; product: { name: string; brand: string; unitCost: unknown } };
+type Variant = { id: string; sku: string; color: string | null; size: string | null; product: { name: string; brand: string; unitCost: number } };
 
 export function AdjustmentForm({ locations, variants }: { locations: Location[]; variants: Variant[] }) {
   const [isPending, startTransition] = useTransition();
