@@ -14,6 +14,7 @@ import {
 } from "@/server/services/forecasting.service";
 import { runReorderCheck } from "@/server/jobs/reorder-check.job";
 import { runCostSnapshot } from "@/server/services/cost-snapshot.service";
+import { runDataRetention } from "@/server/jobs/data-retention.job";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -42,9 +43,13 @@ export async function POST(req: NextRequest) {
       const written = await runCostSnapshot();
       return NextResponse.json({ job, written });
     }
+    case "data-retention": {
+      const result = await runDataRetention();
+      return NextResponse.json({ job, ...result });
+    }
     default:
       return NextResponse.json(
-        { error: `Unknown job "${job}". Valid options: demand-forecast, reorder-check, cost-snapshot` },
+        { error: `Unknown job "${job}". Valid options: demand-forecast, reorder-check, cost-snapshot, data-retention` },
         { status: 400 }
       );
   }

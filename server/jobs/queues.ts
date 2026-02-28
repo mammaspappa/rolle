@@ -36,6 +36,16 @@ export const costSnapshotQueue = new Queue("cost-snapshot", {
   },
 });
 
+export const dataRetentionQueue = new Queue("data-retention", {
+  connection: bullConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: "exponential", delay: 5000 },
+    removeOnComplete: { count: 50 },
+    removeOnFail: { count: 100 },
+  },
+});
+
 /** Enqueue a demand forecast run (optionally scoped to specific targets). */
 export async function enqueueDemandForecast(data: Record<string, unknown> = {}) {
   return demandForecastQueue.add("run", data);
@@ -49,4 +59,9 @@ export async function enqueueReorderCheck(data: Record<string, unknown> = {}) {
 /** Enqueue a nightly cost snapshot. */
 export async function enqueueCostSnapshot(data: Record<string, unknown> = {}) {
   return costSnapshotQueue.add("run", data);
+}
+
+/** Enqueue a data retention purge run. */
+export async function enqueueDataRetention(data: Record<string, unknown> = {}) {
+  return dataRetentionQueue.add("run", data);
 }

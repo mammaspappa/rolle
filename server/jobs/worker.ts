@@ -13,16 +13,36 @@
 import { startDemandForecastWorker } from "./demand-forecast.job";
 import { startReorderCheckWorker } from "./reorder-check.job";
 import { startCostSnapshotWorker } from "./cost-snapshot.job";
-import { demandForecastQueue, reorderCheckQueue, costSnapshotQueue } from "./queues";
+import { startDataRetentionWorker } from "./data-retention.job";
+import { demandForecastQueue, reorderCheckQueue, costSnapshotQueue, dataRetentionQueue } from "./queues";
+import { redis } from "./redis";
 
 console.log("[worker] starting Rolle background workers…");
 
 // Start workers
-const workers = [
-  startDemandForecastWorker(),
-  startReorderCheckWorker(),
-  startCostSnapshotWorker(),
-];
+const demandForecastWorker = startDemandForecastWorker();
+const reorderCheckWorker = startReorderCheckWorker();
+const costSnapshotWorker = startCostSnapshotWorker();
+const dataRetentionWorker = startDataRetentionWorker();
+
+const workers = [demandForecastWorker, reorderCheckWorker, costSnapshotWorker, dataRetentionWorker];
+
+// Write last-run timestamps to Redis on completion
+demandForecastWorker.on("completed", () => {
+  redis.set("job:last-run:demand-forecast", new Date().toISOString());
+});
+
+reorderCheckWorker.on("completed", () => {
+  redis.set("job:last-run:reorder-check", new Date().toISOString());
+});
+
+costSnapshotWorker.on("completed", () => {
+  redis.set("job:last-run:cost-snapshot", new Date().toISOString());
+});
+
+dataRetentionWorker.on("completed", () => {
+  redis.set("job:last-run:data-retention", new Date().toISOString());
+});
 
 // Schedule nightly jobs (run once at startup for development convenience)
 // In production, use a proper scheduler (cron, BullMQ scheduler, etc.)
@@ -43,7 +63,12 @@ async function scheduleNightlyJobs() {
     repeat: { pattern: "0 1 * * *" },
   });
 
-  console.log("[worker] nightly jobs scheduled (01:00 UTC cost snapshot, 02:00 UTC forecast, 03:00 UTC reorder check)");
+  // Monthly at 04:00 UTC on the 1st of each month
+  await dataRetentionQueue.add("monthly-data-retention", {}, {
+    repeat: { pattern: "0 4 1 * *" },
+  });
+
+  console.log("[worker] nightly jobs scheduled (01:00 UTC cost snapshot, 02:00 UTC forecast, 03:00 UTC reorder check, 04:00 UTC 1st-of-month data retention)");
 }
 
 scheduleNightlyJobs().catch(console.error);

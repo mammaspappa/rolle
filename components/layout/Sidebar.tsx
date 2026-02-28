@@ -17,6 +17,7 @@ import {
   Truck,
   Settings,
   Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 
 const navItems = [
@@ -35,7 +36,11 @@ const navItems = [
   { label: "Setup Guide", href: "/setup", icon: Sparkles },
 ];
 
-export function Sidebar() {
+interface Props {
+  userRole?: string;
+}
+
+export function Sidebar({ userRole }: Props) {
   const pathname = usePathname();
 
   return (
@@ -76,6 +81,22 @@ export function Sidebar() {
               </li>
             );
           })}
+          {userRole === "ADMIN" && (
+            <li>
+              <Link
+                href="/admin"
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  pathname.startsWith("/admin")
+                    ? "bg-slate-700 text-white font-medium"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                )}
+              >
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                Admin
+              </Link>
+            </li>
+          )}
         </ul>
       </nav>
 

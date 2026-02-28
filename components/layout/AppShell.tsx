@@ -41,7 +41,7 @@ export function AppShell({ children, userName, userRole, alertCount }: Props) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
-        <Sidebar />
+        <Sidebar userRole={userRole} />
       </div>
 
       {/* Main content */}
