@@ -6,6 +6,10 @@ const nextConfig = {
   // Next.js 14 does not support wildcards here — list specific IPs/hosts.
   // Add your machine's IP if it changes.
   allowedDevOrigins: ["91.223.169.40"],
+  // BullMQ's ESM dist imports ioredis/built/utils (an internal subpath not in
+  // ioredis's exports map). Marking bullmq as external causes Node.js to load
+  // it natively via CJS, which bypasses the ESM subpath resolution issue.
+  serverExternalPackages: ["bullmq"],
 };
 
 export default withSentryConfig(nextConfig, {
