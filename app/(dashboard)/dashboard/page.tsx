@@ -16,6 +16,7 @@ import {
   BarChart3,
   Activity,
   Percent,
+  Sparkles,
 } from "lucide-react";
 
 // ── data ─────────────────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ async function getDashboardData() {
     healthBands,
     salesTrend,
     valueByLocation,
+    movementCount,
   ] = await Promise.all([
     db.location.count({ where: { isActive: true } }),
     db.product.count({ where: { isActive: true } }),
@@ -55,16 +57,21 @@ async function getDashboardData() {
     getInventoryHealthBands(),
     getSalesvsForecastTrend(12),
     getInventoryValueByLocation(),
+    db.stockMovement.count(),
   ]);
 
   const criticalAlerts = alertSummary.find((a) => a.severity === "CRITICAL")?._count ?? 0;
   const warningAlerts = alertSummary.find((a) => a.severity === "WARNING")?._count ?? 0;
   const totalAlerts = alertSummary.reduce((sum, a) => sum + a._count, 0);
 
+  // Show setup banner when there are no products or no stock movements yet
+  const showSetupBanner = productCount === 0 || movementCount === 0;
+
   return {
     locationCount, productCount, variantCount,
     criticalAlerts, warningAlerts, totalAlerts,
     lowStockCount, recentAlerts, kpis, healthBands, salesTrend, valueByLocation,
+    showSetupBanner,
   };
 }
 
@@ -115,6 +122,32 @@ export default async function DashboardPage() {
         </div>
         <DashboardJobButtons />
       </div>
+
+      {/* Setup banner — only shown when system is not yet configured */}
+      {d.showSetupBanner && (
+        <Card className="border-indigo-200 bg-indigo-50/50">
+          <CardContent className="pt-4 flex items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <Sparkles className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-indigo-900">
+                  Welcome to Rolle — finish setting up your system
+                </p>
+                <p className="text-xs text-indigo-600 mt-0.5">
+                  {d.productCount === 0
+                    ? "No products added yet. Follow the setup guide to get started."
+                    : "Stock movements not recorded yet. Add initial inventory to activate KPIs."}
+                </p>
+              </div>
+            </div>
+            <Link href="/setup">
+              <button className="shrink-0 text-sm font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900">
+                Open setup guide →
+              </button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPI row 1 — operational */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

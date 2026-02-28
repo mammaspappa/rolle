@@ -16,6 +16,7 @@ import {
   MapPin,
   Truck,
   Settings,
+  Sparkles,
 } from "lucide-react";
 
 const navItems = [
@@ -31,6 +32,7 @@ const navItems = [
   { label: "Locations", href: "/locations", icon: MapPin },
   { label: "Suppliers", href: "/suppliers", icon: Truck },
   { label: "Settings", href: "/settings", icon: Settings },
+  { label: "Setup Guide", href: "/setup", icon: Sparkles },
 ];
 
 export function Sidebar() {

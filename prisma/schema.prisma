@@ -325,6 +325,11 @@ model StockMovement {
   @@index([toLocationId, occurredAt])
   @@index([type, occurredAt])
   @@index([referenceId])
+  // Composite covering indexes for the most frequent query patterns:
+  // forecasting engine: WHERE type='SALE' AND productVariantId IN (...) AND occurredAt >= ?
+  @@index([type, productVariantId, occurredAt])
+  // location-filtered sales history: WHERE type='SALE' AND fromLocationId = ? AND occurredAt >= ?
+  @@index([type, fromLocationId, occurredAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -440,6 +445,8 @@ model DemandForecast {
 
   @@unique([productVariantId, locationId, periodStart])
   @@index([productVariantId, locationId, periodStart])
+  // For /forecasts?locationId=... page: filtered by location across all variants
+  @@index([locationId, periodStart])
 }
 
 // ---------------------------------------------------------------------------
@@ -492,6 +499,8 @@ model CostRecord {
   @@index([date])
   @@index([productVariantId])
   @@index([locationId])
+  // For cost trend queries: WHERE locationId = ? ORDER BY date DESC
+  @@index([locationId, date])
 }
 
 // ---------------------------------------------------------------------------
