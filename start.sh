@@ -27,6 +27,22 @@ echo ""
 echo -e "${BOLD}  Rolle Inventory — dev launcher${RESET}"
 echo "  ─────────────────────────────"
 
+# ── 0. Memory / swap check ────────────────────────────────────────────────────
+
+FREE_MB=$(free -m | awk '/^Mem/{print $4}')
+SWAP_TOTAL=$(free -m | awk '/^Swap/{print $2}')
+if [ "$SWAP_TOTAL" -eq 0 ]; then
+  echo ""
+  echo -e "  ${YELLOW}⚠  WARNING: No swap space detected (${FREE_MB}MB RAM free).${RESET}"
+  echo "  Next.js dev compilation can peak at 1.5GB+ and will crash the process"
+  echo "  if the system runs out of memory. To add a 2GB swapfile, run:"
+  echo ""
+  echo "    sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile"
+  echo "    sudo mkswap /swapfile && sudo swapon /swapfile"
+  echo "    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab"
+  echo ""
+fi
+
 # ── 1. Ensure Docker / database is running ───────────────────────────────────
 
 echo ""
