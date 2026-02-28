@@ -1,7 +1,10 @@
 import { withSentryConfig } from "@sentry/nextjs";
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  // Allow dev server to be accessed from other machines on the network
+  allowedDevOrigins: ["*"],
+};
 
 export default withSentryConfig(nextConfig, {
   // Suppresses source map upload logs during build
