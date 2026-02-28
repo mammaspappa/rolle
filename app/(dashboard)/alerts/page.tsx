@@ -21,14 +21,22 @@ function getAction(
   type: string,
   referenceId: string | null,
   referenceType: string | null,
+  locationId: string | null,
+  productVariantId: string | null,
 ): { href: string; label: string } | null {
+  const toParam = locationId ? `toLocationId=${locationId}` : "";
+  const variantParam = productVariantId ? `variantId=${productVariantId}` : "";
+
   switch (type) {
-    case "STOCKOUT":
-      return { href: "/transfer-orders/new", label: "Create Transfer Order" };
+    case "STOCKOUT": {
+      const params = [toParam, variantParam].filter(Boolean).join("&");
+      return { href: `/transfer-orders/new${params ? `?${params}` : ""}`, label: "Create Transfer Order" };
+    }
     case "LOW_STOCK":
     case "REORDER_TRIGGERED":
-    case "OVERSTOCK":
-      return { href: "/allocation", label: "Review Allocation" };
+    case "OVERSTOCK": {
+      return { href: `/allocation${variantParam ? `?${variantParam}` : ""}`, label: "Review Allocation" };
+    }
     case "DELAYED_SHIPMENT":
       if (!referenceId) return null;
       return referenceType === "PO"
@@ -136,7 +144,7 @@ export default async function AlertsPage() {
                         }}
                         styles={styles}
                         typeLabel={alertTypeLabel[alert.type] ?? alert.type}
-                        action={getAction(alert.type, alert.referenceId, alert.referenceType)}
+                        action={getAction(alert.type, alert.referenceId, alert.referenceType, alert.locationId, alert.productVariantId)}
                       />
                     );
                   })}

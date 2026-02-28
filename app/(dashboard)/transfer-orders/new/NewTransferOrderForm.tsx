@@ -17,15 +17,17 @@ type Variant = {
   inventoryLevels: { locationId: string; quantityOnHand: number; quantityReserved: number }[];
 };
 
-interface Props { locations: Location[]; variants: Variant[] }
+interface Props { locations: Location[]; variants: Variant[]; defaultToId?: string; defaultVariantId?: string }
 
-export function NewTransferOrderForm({ locations, variants }: Props) {
+export function NewTransferOrderForm({ locations, variants, defaultToId, defaultVariantId }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [fromId, setFromId] = useState(locations.find((l) => l.type === "WAREHOUSE")?.id ?? locations[0]?.id ?? "");
-  const [toId, setToId] = useState(locations.find((l) => l.type === "STORE")?.id ?? "");
+  const [toId, setToId] = useState(defaultToId ?? locations.find((l) => l.type === "STORE")?.id ?? "");
+  const firstVariantId = defaultVariantId ?? variants[0]?.id ?? "";
+  const firstVariant = variants.find((v) => v.id === firstVariantId) ?? variants[0];
   const [lines, setLines] = useState<(TOLineInput & { _key: number })[]>([
-    { _key: 0, productVariantId: variants[0]?.id ?? "", quantityRequested: 1, unitCost: Number(variants[0]?.product.unitCost ?? 0) },
+    { _key: 0, productVariantId: firstVariant?.id ?? "", quantityRequested: 1, unitCost: Number(firstVariant?.product.unitCost ?? 0) },
   ]);
   const [keyCounter, setKeyCounter] = useState(1);
 

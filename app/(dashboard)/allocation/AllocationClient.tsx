@@ -25,6 +25,7 @@ interface Props {
   }[];
   allVariants: VariantOption[];
   warehouseId: string;
+  defaultVariantId?: string;
 }
 
 function TierBadge({ tier }: { tier: string }) {
@@ -44,9 +45,10 @@ export function AllocationClient({
   variantsNeedingAllocation,
   allVariants,
   warehouseId,
+  defaultVariantId,
 }: Props) {
   const [selectedVariantId, setSelectedVariantId] = useState<string>(
-    variantsNeedingAllocation[0]?.id ?? ""
+    defaultVariantId ?? variantsNeedingAllocation[0]?.id ?? ""
   );
   const [proposal, setProposal] = useState<AllocationProposal | null>(null);
   const [adjustments, setAdjustments] = useState<Record<string, number>>({});

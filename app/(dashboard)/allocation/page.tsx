@@ -22,7 +22,12 @@ async function getWarehouse() {
   });
 }
 
-export default async function AllocationPage() {
+export default async function AllocationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ variantId?: string }>;
+}) {
+  const { variantId } = await searchParams;
   const [{ needingAllocation, all }, warehouse] = await Promise.all([
     getVariants(),
     getWarehouse(),
@@ -40,6 +45,7 @@ export default async function AllocationPage() {
 
       <AllocationClient
         variantsNeedingAllocation={needingAllocation}
+        defaultVariantId={variantId}
         allVariants={all.map((v) => ({
           id: v.id,
           sku: v.sku,

@@ -3,7 +3,12 @@ import { NewTransferOrderForm } from "./NewTransferOrderForm";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-export default async function NewTOPage() {
+export default async function NewTOPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ toLocationId?: string; variantId?: string }>;
+}) {
+  const { toLocationId, variantId } = await searchParams;
   const [locations, variants] = await Promise.all([
     db.location.findMany({
       where: { isActive: true },
@@ -32,6 +37,8 @@ export default async function NewTOPage() {
       <NewTransferOrderForm
         locations={locations}
         variants={variants.map((v) => ({ ...v, product: { ...v.product, unitCost: Number(v.product.unitCost) } }))}
+        defaultToId={toLocationId}
+        defaultVariantId={variantId}
       />
     </div>
   );
