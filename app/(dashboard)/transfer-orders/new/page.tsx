@@ -29,7 +29,10 @@ export default async function NewTOPage() {
         <h1 className="text-2xl font-semibold text-slate-900">New Transfer Order</h1>
         <p className="text-sm text-slate-500 mt-1">Move stock between locations</p>
       </div>
-      <NewTransferOrderForm locations={locations} variants={variants} />
+      <NewTransferOrderForm
+        locations={locations}
+        variants={variants.map((v) => ({ ...v, product: { ...v.product, unitCost: Number(v.product.unitCost) } }))}
+      />
     </div>
   );
 }

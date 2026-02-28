@@ -23,7 +23,11 @@ export default async function NewPOPage() {
         <h1 className="text-2xl font-semibold text-slate-900">New Purchase Order</h1>
         <p className="text-sm text-slate-500 mt-1">Order stock from a supplier</p>
       </div>
-      <NewPurchaseOrderForm suppliers={suppliers} warehouseId={warehouse?.id ?? ""} variants={variants} />
+      <NewPurchaseOrderForm
+        suppliers={suppliers}
+        warehouseId={warehouse?.id ?? ""}
+        variants={variants.map((v) => ({ ...v, product: { ...v.product, unitCost: Number(v.product.unitCost) } }))}
+      />
     </div>
   );
 }

@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2 } from "lucide-react";
 
 type Supplier = { id: string; name: string; currency: string };
-type Variant = { id: string; sku: string; color: string | null; size: string | null; product: { name: string; brand: string; unitCost: unknown; currency: string } };
+type Variant = { id: string; sku: string; color: string | null; size: string | null; product: { name: string; brand: string; unitCost: number; currency: string } };
 
 interface Props {
   suppliers: Supplier[];

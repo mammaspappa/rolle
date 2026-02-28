@@ -13,7 +13,7 @@ import { Plus, Trash2 } from "lucide-react";
 type Location = { id: string; code: string; name: string; type: string };
 type Variant = {
   id: string; sku: string; color: string | null; size: string | null;
-  product: { name: string; brand: string; unitCost: unknown };
+  product: { name: string; brand: string; unitCost: number };
   inventoryLevels: { locationId: string; quantityOnHand: number; quantityReserved: number }[];
 };
 
