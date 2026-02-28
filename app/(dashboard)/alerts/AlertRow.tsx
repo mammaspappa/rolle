@@ -1,8 +1,9 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import { resolveAlert } from "@/server/actions/alerts";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, ArrowRight } from "lucide-react";
 
 interface Props {
   alert: {
@@ -16,9 +17,10 @@ interface Props {
   };
   styles: { badge: string; row: string };
   typeLabel: string;
+  action?: { href: string; label: string } | null;
 }
 
-export function AlertRow({ alert, styles, typeLabel }: Props) {
+export function AlertRow({ alert, styles, typeLabel, action }: Props) {
   const [isPending, startTransition] = useTransition();
 
   function handleResolve() {
@@ -52,14 +54,25 @@ export function AlertRow({ alert, styles, typeLabel }: Props) {
             </span>
           </div>
         </div>
-        <button
-          onClick={handleResolve}
-          disabled={isPending}
-          className="shrink-0 p-1.5 rounded text-slate-300 hover:text-green-500 hover:bg-green-50 transition-colors"
-          title="Resolve alert"
-        >
-          <CheckCircle className="w-4 h-4" />
-        </button>
+        <div className="shrink-0 flex items-center gap-1">
+          {action && (
+            <Link
+              href={action.href}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            >
+              {action.label}
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+          )}
+          <button
+            onClick={handleResolve}
+            disabled={isPending}
+            className="p-1.5 rounded text-slate-300 hover:text-green-500 hover:bg-green-50 transition-colors"
+            title="Resolve alert"
+          >
+            <CheckCircle className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

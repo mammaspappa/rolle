@@ -17,6 +17,31 @@ async function getAlerts() {
   });
 }
 
+function getAction(
+  type: string,
+  referenceId: string | null,
+  referenceType: string | null,
+): { href: string; label: string } | null {
+  switch (type) {
+    case "STOCKOUT":
+      return { href: "/transfer-orders/new", label: "Create Transfer Order" };
+    case "LOW_STOCK":
+    case "REORDER_TRIGGERED":
+    case "OVERSTOCK":
+      return { href: "/allocation", label: "Review Allocation" };
+    case "DELAYED_SHIPMENT":
+      if (!referenceId) return null;
+      return referenceType === "PO"
+        ? { href: `/purchase-orders/${referenceId}`, label: "View Purchase Order" }
+        : { href: `/transfer-orders/${referenceId}`, label: "View Transfer Order" };
+    case "TRANSFER_OVERDUE":
+      if (!referenceId) return null;
+      return { href: `/transfer-orders/${referenceId}`, label: "View Transfer Order" };
+    default:
+      return null;
+  }
+}
+
 const severityStyles: Record<string, { badge: string; row: string }> = {
   CRITICAL: {
     badge: "bg-red-100 text-red-700 border-red-200",
@@ -111,6 +136,7 @@ export default async function AlertsPage() {
                         }}
                         styles={styles}
                         typeLabel={alertTypeLabel[alert.type] ?? alert.type}
+                        action={getAction(alert.type, alert.referenceId, alert.referenceType)}
                       />
                     );
                   })}
