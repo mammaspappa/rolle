@@ -41,10 +41,11 @@ async function getCountData(locationId: string) {
 export default async function PhysicalCountPage({
   searchParams,
 }: {
-  searchParams: { locationId?: string };
+  searchParams: Promise<{ locationId?: string }>;
 }) {
+  const { locationId: locationIdParam } = await searchParams;
   const locations = await getLocations();
-  const locationId = searchParams.locationId ?? locations[0]?.id;
+  const locationId = locationIdParam ?? locations[0]?.id;
   const location = locations.find((l) => l.id === locationId);
 
   const variants = locationId ? await getCountData(locationId) : [];

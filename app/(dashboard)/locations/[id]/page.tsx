@@ -71,12 +71,13 @@ async function getSalesLast30d(locationId: string) {
 export default async function LocationDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const [location, movements, salesGroups] = await Promise.all([
-    getLocation(params.id),
-    getRecentMovements(params.id),
-    getSalesLast30d(params.id),
+    getLocation(id),
+    getRecentMovements(id),
+    getSalesLast30d(id),
   ]);
 
   if (!location) notFound();
@@ -259,7 +260,7 @@ export default async function LocationDetailPage({
                       {m.productVariant.product.brand} — {m.productVariant.sku}
                     </td>
                     <td className="px-4 py-1.5 text-right font-medium text-slate-700">
-                      {m.fromLocationId === params.id ? "-" : "+"}
+                      {m.fromLocationId === id ? "-" : "+"}
                       {m.quantity}
                     </td>
                     <td className="px-4 py-1.5 text-slate-400">{m.performedBy.name}</td>

@@ -34,8 +34,9 @@ const statusNext: Record<string, string> = {
   SENT: "Mark as Confirmed",
 };
 
-export default async function PODetailPage({ params }: { params: { id: string } }) {
-  const po = await getPO(params.id);
+export default async function PODetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const po = await getPO(id);
   if (!po) notFound();
 
   const canAdvance = ["DRAFT", "SENT"].includes(po.status);

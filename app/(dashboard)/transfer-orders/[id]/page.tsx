@@ -29,8 +29,9 @@ const statusStyle: Record<string, string> = {
   CANCELLED: "bg-red-100 text-red-600",
 };
 
-export default async function TODetailPage({ params }: { params: { id: string } }) {
-  const to = await getTO(params.id);
+export default async function TODetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const to = await getTO(id);
   if (!to) notFound();
 
   const canApprove = to.status === "REQUESTED";

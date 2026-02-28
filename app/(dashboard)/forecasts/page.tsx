@@ -87,14 +87,15 @@ function MethodBadge({ method }: { method: string }) {
 export default async function ForecastsPage({
   searchParams,
 }: {
-  searchParams: { locationId?: string };
+  searchParams: Promise<{ locationId?: string }>;
 }) {
+  const { locationId } = await searchParams;
   const [locations, variants] = await Promise.all([
     getLocations(),
-    getForecastSummary(searchParams.locationId),
+    getForecastSummary(locationId),
   ]);
 
-  const selectedLocation = locations.find((l) => l.id === searchParams.locationId);
+  const selectedLocation = locations.find((l) => l.id === locationId);
   const totalForecasts = variants.reduce((s, v) => s + v.demandForecasts.length, 0);
 
   return (
@@ -114,7 +115,7 @@ export default async function ForecastsPage({
       <div className="flex flex-wrap gap-2">
         <a href="/forecasts">
           <Button
-            variant={!searchParams.locationId ? "default" : "outline"}
+            variant={!locationId ? "default" : "outline"}
             size="sm"
             className="text-xs"
           >
@@ -126,7 +127,7 @@ export default async function ForecastsPage({
           .map((loc) => (
             <a key={loc.id} href={`/forecasts?locationId=${loc.id}`}>
               <Button
-                variant={loc.id === searchParams.locationId ? "default" : "outline"}
+                variant={loc.id === locationId ? "default" : "outline"}
                 size="sm"
                 className="text-xs"
               >
@@ -174,7 +175,7 @@ export default async function ForecastsPage({
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left px-4 py-2.5 font-medium text-slate-500">Variant</th>
-                {searchParams.locationId ? (
+                {locationId ? (
                   <th className="text-left px-4 py-2.5 font-medium text-slate-500 w-24">Location</th>
                 ) : (
                   <th className="text-left px-4 py-2.5 font-medium text-slate-500 w-32">Locations</th>
