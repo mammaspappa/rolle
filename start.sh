@@ -8,6 +8,15 @@ set -e
 
 cd "$(dirname "$0")"
 
+# ── Load nvm and switch to project Node version ───────────────────────────────
+export NVM_DIR="$HOME/.nvm"
+# shellcheck source=/dev/null
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+
+if command -v nvm &>/dev/null; then
+  nvm use --silent 2>/dev/null || true
+fi
+
 BOLD="\033[1m"
 GREEN="\033[0;32m"
 YELLOW="\033[0;33m"
@@ -53,7 +62,7 @@ case "$SEED_CHOICE" in
     if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
       echo ""
       echo "  Running migrations …"
-      npx prisma@5 migrate deploy --schema=prisma/schema.prisma
+      npx prisma migrate deploy
       echo "  Seeding …"
       npm run db:seed
       echo -e "  ${GREEN}✓ Seed complete${RESET}"
@@ -68,7 +77,7 @@ case "$SEED_CHOICE" in
     if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
       echo ""
       echo "  Running migrations …"
-      npx prisma@5 migrate deploy --schema=prisma/schema.prisma
+      npx prisma migrate deploy
       echo "  Seeding …"
       npm run db:seed
       echo "  Generating sales history …"
