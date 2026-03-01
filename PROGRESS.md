@@ -434,3 +434,140 @@ Rolle/
 ├── docker-compose.yml           ← PostgreSQL + Redis
 └── .env                         ← Local environment variables
 ```
+
+---
+
+### ☐ Phase 6 — Grouping & Navigation (Weeks 18–19)
+*Goal: Make large datasets easier to scan — collapse variants under product headings, add group-by controls, reduce visual noise on the two busiest pages.*
+
+#### Problem statement
+
+Both the Inventory grid and the Forecasts table are flat lists that repeat the brand + product name on every variant row. A product with 6 size/colour variants generates 6 near-identical rows — with 21 locations in the inventory grid that means 6 × 21 = 126 cells with no visual anchor. As the catalogue grows this becomes hard to navigate.
+
+#### 6.1 — Inventory grid: collapsible product groups
+
+**Target file:** `app/(dashboard)/inventory/InventoryTable.tsx`
+
+The table is already a client component with `useState` + `useMemo`, so grouping state fits naturally here.
+
+**Changes:**
+
+1. **Group variants by `productId`** (computed inside `useMemo` from the already-filtered list):
+   ```typescript
+   const groups = useMemo(() => {
+     const map = new Map<string, VariantRow[]>();
+     for (const v of filtered) {
+       if (!map.has(v.productId)) map.set(v.productId, []);
+       map.get(v.productId)!.push(v);
+     }
+     return Array.from(map.entries()).map(([productId, rows]) => ({
+       productId,
+       brand: rows[0].brand,
+       name: rows[0].name,
+       category: rows[0].category,
+       rows,
+     }));
+   }, [filtered]);
+   ```
+
+2. **Collapsed state** — `Set<string>` of productIds; empty = all expanded:
+   ```typescript
+   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+   const toggleGroup = (id: string) =>
+     setCollapsed(prev => {
+       const next = new Set(prev);
+       next.has(id) ? next.delete(id) : next.add(id);
+       return next;
+     });
+   ```
+
+3. **Product group header row** — rendered before each group's variant rows:
+   - Background: `bg-slate-100`, sticky left cell same as header
+   - Left cell: `▶/▼` chevron + **Brand — Product name** + `(N variants)` badge
+   - Data cells: sum of `qty` across all variants in group for that location (group subtotals)
+   - Clicking the row (or the chevron) toggles collapsed state for that `productId`
+
+4. **Variant rows** — hidden when their `productId` is in `collapsed`; product name column shows only SKU + colour + size (brand/name already in the group header, no need to repeat)
+
+5. **Toolbar additions** (alongside the existing search bar):
+   - **"Collapse all" / "Expand all"** button — sets `collapsed` to all productIds or `new Set()`
+   - Counts update: `{groups.length} products · {filtered.length} variants`
+
+6. **Totals row** — unchanged; still sums over all filtered variants regardless of collapsed state
+
+**Behaviour notes:**
+- Searching clears collapsed state (re-expand everything so matches are visible)
+- Groups with a single variant skip the expand/collapse chrome and render the variant row directly (no overhead for single-variant products)
+
+---
+
+#### 6.2 — Inventory grid: Group-by mode
+
+Add a `groupBy: "product" | "brand" | "category"` toggle above the table (segmented control / three buttons). Defaults to `"product"`.
+
+- **`"product"`** — groups by `productId` (as above)
+- **`"brand"`** — groups by `brand` string; header row shows brand name + total variants count
+- **`"category"`** — groups by `category`; header row shows category + variant count
+
+The grouping `useMemo` is parameterised by `groupBy`:
+```typescript
+const groupKey = (v: VariantRow) =>
+  groupBy === "brand" ? v.brand :
+  groupBy === "category" ? v.category :
+  v.productId;
+
+const groupLabel = (v: VariantRow) =>
+  groupBy === "brand" ? v.brand :
+  groupBy === "category" ? v.category :
+  `${v.brand} — ${v.name}`;
+```
+
+Changing `groupBy` resets `collapsed` to `new Set()` (expand all in new grouping).
+
+---
+
+#### 6.3 — Forecasts page: collapsible product groups
+
+**Current state:** `app/(dashboard)/forecasts/page.tsx` is a server component that renders the full table inline. The table can be 100s of rows when viewing all locations (1 row per variant × location).
+
+**Changes:**
+
+1. **Extract** the forecast table section into a new **`ForecastTable` client component** at `app/(dashboard)/forecasts/ForecastTable.tsx`. The server page fetches data and passes serialised props; `ForecastTable` owns the group collapse state (mirrors the InventoryTable pattern).
+
+2. **Group rows by `productId`** (`v.id` from the variant loop in the existing page):
+   ```typescript
+   // group: { productId, brand, name, rows: ForecastRow[] }
+   ```
+
+3. **Product group header row:**
+   - Left cell: chevron + **Brand — Product name** + `(N variants)` badge
+   - Next-week column: sum of `forecastedDemand` across all variants in group
+   - Method column: most common method among rows in group (or `"Mixed"` if multiple)
+   - Period column: range of `periodStart` values in group
+
+4. **Variant rows:** when collapsed, hide all rows under that `productId`. Visible rows show only SKU + colour + size in the variant column (same pattern as inventory).
+
+5. **Collapse-all / expand-all** button in the `ForecastControls` bar (or alongside it).
+
+**No server-side changes needed** — the existing `getForecastSummary()` already returns `v.id` (productId) which is all grouping needs.
+
+---
+
+#### 6.4 — Location filter persistence (small UX improvement)
+
+Currently switching the location filter on `/forecasts` navigates to a new URL, resetting scroll position. Instead:
+- Keep the location filter buttons but append `?locationId=` as a shallow navigation (already works)
+- Persist `locationId` in the URL so bookmarking and sharing work (already works)
+- *No behaviour change needed — this is already correct.*
+
+---
+
+#### Phase 6 checklist
+
+- [ ] `InventoryTable.tsx` — group by product: header rows, collapse/expand, group subtotals
+- [ ] `InventoryTable.tsx` — collapse-all / expand-all toolbar button
+- [ ] `InventoryTable.tsx` — Group-by toggle (product / brand / category)
+- [ ] `ForecastTable.tsx` — new client component extracted from `forecasts/page.tsx`
+- [ ] `ForecastTable.tsx` — group by product: header rows, collapse/expand
+- [ ] `ForecastTable.tsx` — collapse-all / expand-all in controls bar
+- [ ] Update `forecasts/page.tsx` to pass serialised data to `ForecastTable`
