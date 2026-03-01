@@ -1,10 +1,11 @@
 import { db } from "@/server/db";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { AddVariantForm } from "./AddVariantForm";
+import { EditProductForm } from "./EditProductForm";
+import { VariantsSection, type SerializedVariant } from "./VariantsSection";
 
 async function getProduct(id: string) {
   return db.product.findUnique({
@@ -29,13 +30,20 @@ async function getProduct(id: string) {
   });
 }
 
+async function getSuppliers() {
+  return db.supplier.findMany({
+    select: { id: true, name: true, currency: true },
+    orderBy: { name: "asc" },
+  });
+}
+
 export default async function ProductDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const product = await getProduct(id);
+  const [product, suppliers] = await Promise.all([getProduct(id), getSuppliers()]);
   if (!product) notFound();
 
   const totalUnits = product.variants.reduce(
@@ -43,6 +51,38 @@ export default async function ProductDetailPage({
       sum + v.inventoryLevels.reduce((s, l) => s + l.quantityOnHand, 0),
     0
   );
+
+  // Serialize Decimal fields + flatten for client components
+  const serializedVariants: SerializedVariant[] = product.variants.map((v) => ({
+    id: v.id,
+    sku: v.sku,
+    size: v.size,
+    color: v.color,
+    unitCost: v.unitCost !== null ? Number(v.unitCost) : null,
+    totalUnits: v.inventoryLevels.reduce((s, l) => s + l.quantityOnHand, 0),
+    levels: v.inventoryLevels.map((l) => ({
+      locationCode: l.location.code,
+      locationName: l.location.name,
+      locationType: l.location.type,
+      locationCity: l.location.city,
+      quantityOnHand: l.quantityOnHand,
+      quantityInTransit: l.quantityInTransit,
+    })),
+  }));
+
+  const productDefaults = {
+    name: product.name,
+    brand: product.brand,
+    category: product.category,
+    subcategory: product.subcategory,
+    description: product.description,
+    supplierId: product.supplierId,
+    unitCost: Number(product.unitCost),
+    retailPrice: Number(product.retailPrice),
+    leadTimeDays: product.leadTimeDays,
+    reorderPoint: product.reorderPoint,
+    safetyStock: product.safetyStock,
+  };
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -66,18 +106,23 @@ export default async function ProductDetailPage({
               </Badge>
             )}
           </div>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            {product.name}
-          </h1>
+          <h1 className="text-2xl font-semibold text-slate-900">{product.name}</h1>
           <p className="text-slate-500 text-sm mt-1">
             {product.brand} · SKU {product.sku}
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-slate-900">
-            {totalUnits.toLocaleString()}
+        <div className="text-right flex flex-col items-end gap-3">
+          <div>
+            <div className="text-2xl font-bold text-slate-900">
+              {totalUnits.toLocaleString()}
+            </div>
+            <div className="text-xs text-slate-500">total units on hand</div>
           </div>
-          <div className="text-xs text-slate-500">total units on hand</div>
+          <EditProductForm
+            productId={product.id}
+            defaultValues={productDefaults}
+            suppliers={suppliers}
+          />
         </div>
       </div>
 
@@ -107,102 +152,13 @@ export default async function ProductDetailPage({
         </Card>
       </div>
 
-      {/* Variants with stock breakdown */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-slate-700">Variants & Stock Levels</h2>
-          <AddVariantForm
-            productId={product.id}
-            productSku={product.sku}
-            unitCost={Number(product.unitCost)}
-          />
-        </div>
-        {product.variants.map((variant) => {
-          const variantTotal = variant.inventoryLevels.reduce(
-            (s, l) => s + l.quantityOnHand,
-            0
-          );
-          const warehouse = variant.inventoryLevels.find(
-            (l) => l.location.type === "WAREHOUSE"
-          );
-          const stores = variant.inventoryLevels.filter(
-            (l) => l.location.type === "STORE"
-          );
-
-          return (
-            <Card key={variant.id}>
-              <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-semibold">
-                  {variant.sku}
-                  {variant.color && (
-                    <span className="text-slate-500 font-normal ml-2">
-                      {variant.color}
-                    </span>
-                  )}
-                  {variant.size && (
-                    <span className="text-slate-500 font-normal ml-2">
-                      Size {variant.size}
-                    </span>
-                  )}
-                </CardTitle>
-                <span className="text-sm font-semibold text-slate-700">
-                  {variantTotal} units total
-                </span>
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                <table className="w-full text-xs">
-                  <tbody>
-                    {/* Warehouse first */}
-                    {warehouse && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-1.5 font-medium text-slate-600 w-1/2">
-                          🏭 {warehouse.location.name}
-                        </td>
-                        <td className="py-1.5 text-right">
-                          <StockCell qty={warehouse.quantityOnHand} inTransit={warehouse.quantityInTransit} />
-                        </td>
-                      </tr>
-                    )}
-                    {stores.map((level) => (
-                      <tr
-                        key={level.location.code}
-                        className="border-b border-slate-50"
-                      >
-                        <td className="py-1 text-slate-600">
-                          {level.location.name}
-                          <span className="text-slate-400 ml-1">
-                            ({level.location.city})
-                          </span>
-                        </td>
-                        <td className="py-1 text-right">
-                          <StockCell qty={level.quantityOnHand} inTransit={level.quantityInTransit} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {/* Variants */}
+      <VariantsSection
+        productId={product.id}
+        productSku={product.sku}
+        defaultUnitCost={Number(product.unitCost)}
+        variants={serializedVariants}
+      />
     </div>
-  );
-}
-
-function StockCell({ qty, inTransit }: { qty: number; inTransit: number }) {
-  const color =
-    qty === 0
-      ? "text-red-600 font-semibold"
-      : qty <= 3
-      ? "text-orange-600"
-      : "text-slate-700";
-  return (
-    <span className={color}>
-      {qty}
-      {inTransit > 0 && (
-        <span className="text-slate-400 ml-1">(+{inTransit} incoming)</span>
-      )}
-    </span>
   );
 }

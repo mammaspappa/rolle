@@ -94,6 +94,29 @@ export async function createProductVariant(data: {
   return variant;
 }
 
+export async function updateProductVariant(
+  variantId: string,
+  productId: string,
+  data: {
+    color?: string;
+    size?: string;
+    unitCost?: number | null;
+  }
+) {
+  await getUser();
+
+  await db.productVariant.update({
+    where: { id: variantId },
+    data: {
+      ...(data.color !== undefined && { color: data.color?.trim() || null }),
+      ...(data.size !== undefined && { size: data.size?.trim() || null }),
+      ...(data.unitCost !== undefined && { unitCost: data.unitCost }),
+    },
+  });
+
+  revalidatePath(`/products/${productId}`);
+}
+
 export async function updateProduct(
   productId: string,
   data: {
