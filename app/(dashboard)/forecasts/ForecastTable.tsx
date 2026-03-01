@@ -33,6 +33,67 @@ export type ForecastVariantRow = {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
+type DosLevel = "critical" | "warning" | "ok" | "none";
+
+function worstDosLevel(forecasts: ForecastRow[]): DosLevel {
+  const valid = forecasts
+    .map((f) => f.daysOfStock)
+    .filter((d): d is number => d !== null);
+  if (valid.length === 0) return "none";
+  const min = Math.min(...valid);
+  if (min < 7) return "critical";
+  if (min < 14) return "warning";
+  return "ok";
+}
+
+function minDosValue(forecasts: ForecastRow[]): number | null {
+  const valid = forecasts
+    .map((f) => f.daysOfStock)
+    .filter((d): d is number => d !== null);
+  return valid.length > 0 ? Math.min(...valid) : null;
+}
+
+/** Colored dot + minimum DOS value for collapsed summary rows. */
+function DosSignal({
+  level,
+  min,
+}: {
+  level: DosLevel;
+  min: number | null;
+}) {
+  if (level === "none") return <span className="text-slate-300">—</span>;
+
+  const cfg = {
+    critical: {
+      dot: "bg-red-500",
+      text: "text-red-600 font-semibold",
+      title: "At least one location has fewer than 7 days of stock",
+    },
+    warning: {
+      dot: "bg-amber-400",
+      text: "text-amber-600 font-semibold",
+      title: "At least one location has fewer than 14 days of stock",
+    },
+    ok: {
+      dot: "bg-green-500",
+      text: "text-green-600",
+      title: "All locations have 14+ days of stock",
+    },
+  }[level];
+
+  return (
+    <span
+      className="inline-flex items-center justify-end gap-1.5"
+      title={cfg.title}
+    >
+      <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
+      {min !== null && (
+        <span className={`text-xs ${cfg.text}`}>{min}d</span>
+      )}
+    </span>
+  );
+}
+
 function MethodBadge({ method }: { method: string }) {
   const map: Record<string, { label: string; className: string }> = {
     MOVING_AVG_12W: { label: "WMA",      className: "bg-blue-50 text-blue-700 border-blue-200" },
@@ -50,61 +111,73 @@ function MethodBadge({ method }: { method: string }) {
   );
 }
 
-function dosColor(dos: number | null): string {
+function dosRowColor(dos: number | null): string {
   if (dos === null) return "text-slate-400";
   if (dos < 7)  return "text-red-600 font-semibold";
   if (dos < 14) return "text-amber-600 font-semibold";
   return "text-green-600";
 }
 
-/** Most common method across a list of forecast rows, or "Mixed" if tied. */
-function dominantMethod(rows: ForecastRow[]): string {
+/** Most common method across rows; "Mixed" on a tie. */
+function dominantMethod(forecasts: ForecastRow[]): string {
   const counts = new Map<string, number>();
-  for (const r of rows) counts.set(r.forecastMethod, (counts.get(r.forecastMethod) ?? 0) + 1);
+  for (const f of forecasts)
+    counts.set(f.forecastMethod, (counts.get(f.forecastMethod) ?? 0) + 1);
   let best = "";
   let bestCount = 0;
-  for (const [method, count] of counts) {
-    if (count > bestCount) { best = method; bestCount = count; }
+  for (const [m, c] of counts) {
+    if (c > bestCount) { best = m; bestCount = c; }
   }
-  const leaders = [...counts.entries()].filter(([, c]) => c === bestCount);
-  return leaders.length > 1 ? "Mixed" : best;
+  return [...counts.values()].filter((c) => c === bestCount).length > 1
+    ? "Mixed"
+    : best;
 }
 
 // ── component ─────────────────────────────────────────────────────────────────
 
 interface Props {
   variants: ForecastVariantRow[];
-  locationId?: string; // undefined = all locations mode
+  locationId?: string;
 }
 
 export function ForecastTable({ variants, locationId }: Props) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Level 1 — product groups (start all expanded)
+  const [collapsedProducts, setCollapsedProducts] = useState<Set<string>>(
+    new Set()
+  );
 
-  // Group variants by productId
+  // Level 2 — variant location rows (start all collapsed so you drill in)
+  const [collapsedVariants, setCollapsedVariants] = useState<Set<string>>(
+    () => new Set(variants.map((v) => v.variantId))
+  );
+
   const groups = useMemo(() => {
     const map = new Map<
       string,
       { productId: string; brand: string; name: string; variants: ForecastVariantRow[] }
     >();
     for (const v of variants) {
-      if (!map.has(v.productId)) {
-        map.set(v.productId, {
-          productId: v.productId,
-          brand: v.brand,
-          name: v.productName,
-          variants: [],
-        });
-      }
+      if (!map.has(v.productId))
+        map.set(v.productId, { productId: v.productId, brand: v.brand, name: v.productName, variants: [] });
       map.get(v.productId)!.variants.push(v);
     }
     return Array.from(map.values());
   }, [variants]);
 
   const allProductIds = useMemo(() => groups.map((g) => g.productId), [groups]);
-  const allCollapsed = allProductIds.length > 0 && collapsed.size === allProductIds.length;
+  const allCollapsed =
+    allProductIds.length > 0 && collapsedProducts.size === allProductIds.length;
 
-  function toggleGroup(id: string) {
-    setCollapsed((prev) => {
+  function toggleProduct(id: string) {
+    setCollapsedProducts((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleVariant(id: string) {
+    setCollapsedVariants((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
@@ -112,7 +185,7 @@ export function ForecastTable({ variants, locationId }: Props) {
   }
 
   function toggleAll() {
-    setCollapsed(allCollapsed ? new Set() : new Set(allProductIds));
+    setCollapsedProducts(allCollapsed ? new Set() : new Set(allProductIds));
   }
 
   const isLocationFiltered = Boolean(locationId);
@@ -166,36 +239,40 @@ export function ForecastTable({ variants, locationId }: Props) {
               )}
               <th className="text-right px-4 py-2.5 font-medium text-slate-500 w-28">Next Week</th>
               <th className="text-right px-4 py-2.5 font-medium text-slate-500 w-24">Daily Avg</th>
-              <th className="text-right px-4 py-2.5 font-medium text-slate-500 w-24">Days Stock</th>
+              <th className="text-right px-4 py-2.5 font-medium text-slate-500 w-28">Days Stock</th>
               <th className="text-center px-4 py-2.5 font-medium text-slate-500 w-20">Method</th>
               <th className="text-left px-4 py-2.5 font-medium text-slate-500 w-28">Period</th>
             </tr>
           </thead>
+
           <tbody>
             {groups.map((group) => {
-              const isCollapsed = collapsed.has(group.productId);
+              const isProductCollapsed = collapsedProducts.has(group.productId);
               const isSingle = group.variants.length === 1;
 
-              // Group header aggregates
-              const allForecasts = group.variants.flatMap((v) => v.forecasts);
-              const groupTotalDemand = allForecasts.reduce(
+              // Aggregates for the product group header
+              const allGroupForecasts = group.variants.flatMap((v) => v.forecasts);
+              const groupTotalDemand = allGroupForecasts.reduce(
                 (s, f) => s + f.forecastedDemand,
                 0
               );
-              const method = dominantMethod(allForecasts);
-              const firstPeriod = allForecasts[0]?.periodStart;
+              const groupDosLevel = worstDosLevel(allGroupForecasts);
+              const groupMinDos = minDosValue(allGroupForecasts);
+              const groupMethod = dominantMethod(allGroupForecasts);
+              const firstPeriod = allGroupForecasts[0]?.periodStart;
 
               return (
                 <Fragment key={group.productId}>
-                  {/* Product group header — skip for single-variant products */}
+                  {/* ── Level 1: Product group header (skip for single-variant) ── */}
                   {!isSingle && (
                     <tr
                       className="bg-slate-100 border-y border-slate-200 cursor-pointer select-none hover:bg-slate-200 transition-colors"
-                      onClick={() => toggleGroup(group.productId)}
+                      onClick={() => toggleProduct(group.productId)}
                     >
+                      {/* Label + chevron */}
                       <td className="px-3 py-2" colSpan={2}>
                         <div className="flex items-center gap-2">
-                          {isCollapsed
+                          {isProductCollapsed
                             ? <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             : <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                           <span className="font-semibold text-slate-700">
@@ -206,19 +283,26 @@ export function ForecastTable({ variants, locationId }: Props) {
                           </span>
                         </div>
                       </td>
+                      {/* Total demand */}
                       <td className="px-4 py-2 text-right">
                         <span className="font-semibold text-slate-700">
                           {groupTotalDemand.toFixed(1)}
                         </span>
-                        <span className="text-slate-400 ml-1 text-xs">u total</span>
+                        <span className="text-slate-400 ml-1 text-xs">u</span>
                       </td>
+                      {/* Daily avg — not meaningful at group level */}
                       <td className="px-4 py-2" />
-                      <td className="px-4 py-2" />
+                      {/* DOS signal */}
+                      <td className="px-4 py-2 text-right">
+                        <DosSignal level={groupDosLevel} min={groupMinDos} />
+                      </td>
+                      {/* Method */}
                       <td className="px-4 py-2 text-center">
-                        {method === "Mixed"
+                        {groupMethod === "Mixed"
                           ? <span className="text-xs text-slate-400 italic">Mixed</span>
-                          : <MethodBadge method={method} />}
+                          : <MethodBadge method={groupMethod} />}
                       </td>
+                      {/* Period */}
                       <td className="px-4 py-2 text-xs text-slate-400">
                         {firstPeriod
                           ? `${format(new Date(firstPeriod), "MMM d")} – ${format(addDays(new Date(firstPeriod), 6), "d")}`
@@ -227,91 +311,141 @@ export function ForecastTable({ variants, locationId }: Props) {
                     </tr>
                   )}
 
-                  {/* Variant × location rows */}
-                  {(!isCollapsed || isSingle) &&
-                    group.variants.flatMap((v, vi) =>
-                      v.forecasts.map((f, fi) => {
-                        const rowIndex = vi * 100 + fi; // stable stripe key
-                        const dailyAvg = f.forecastedDemand / 7;
+                  {/* ── Level 2: Variant headers + location rows ── */}
+                  {(!isProductCollapsed || isSingle) &&
+                    group.variants.map((v) => {
+                      const isVariantCollapsed = collapsedVariants.has(v.variantId);
+                      const variantTotalDemand = v.forecasts.reduce(
+                        (s, f) => s + f.forecastedDemand,
+                        0
+                      );
+                      const variantDosLevel = worstDosLevel(v.forecasts);
+                      const variantMinDos = minDosValue(v.forecasts);
+                      const variantMethod = dominantMethod(v.forecasts);
+                      const variantPeriod = v.forecasts[0]?.periodStart;
+                      const attrs = [v.color, v.size].filter(Boolean).join(" · ");
 
-                        return (
+                      return (
+                        <Fragment key={v.variantId}>
+                          {/* Variant header row */}
                           <tr
-                            key={`${v.variantId}-${f.locationCode}`}
-                            className={`border-b border-slate-100 last:border-0 ${
-                              rowIndex % 2 === 0 ? "" : "bg-slate-50/40"
-                            }`}
+                            className="bg-slate-50 border-b border-slate-200 cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                            onClick={() => toggleVariant(v.variantId)}
                           >
-                            {/* Variant column — show full info only on first forecast row */}
-                            <td className="px-4 py-2.5">
-                              {fi === 0 && (
-                                <>
-                                  <div
-                                    className={`font-medium text-slate-800 text-xs ${
-                                      !isSingle ? "pl-4" : ""
-                                    }`}
-                                  >
-                                    {isSingle
-                                      ? `${v.brand} — ${v.productName}`
-                                      : v.sku}
-                                  </div>
-                                  <div
-                                    className={`text-xs text-slate-400 font-mono ${
-                                      !isSingle ? "pl-4" : ""
-                                    }`}
-                                  >
-                                    {isSingle
-                                      ? `${v.sku}${v.color ? ` · ${v.color}` : ""}${v.size ? ` · ${v.size}` : ""}`
-                                      : [v.color, v.size].filter(Boolean).join(" · ")}
-                                  </div>
-                                </>
-                              )}
+                            {/* Variant label */}
+                            <td className={`py-2 ${isSingle ? "px-4" : "pl-8 pr-4"}`}>
+                              <div className="flex items-center gap-2">
+                                {isVariantCollapsed
+                                  ? <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
+                                  : <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />}
+                                <div>
+                                  {isSingle ? (
+                                    <>
+                                      <div className="font-medium text-slate-800 text-xs">
+                                        {v.brand} — {v.productName}
+                                      </div>
+                                      <div className="font-mono text-slate-400 text-xs mt-0.5">
+                                        {v.sku}{attrs && ` · ${attrs}`}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="font-mono text-slate-600 text-xs">
+                                      {v.sku}{attrs && (
+                                        <span className="text-slate-400"> · {attrs}</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             </td>
-
-                            {/* Location */}
-                            <td className="px-4 py-2.5">
-                              <span className="text-xs font-mono text-slate-600">
-                                {f.locationCode}
+                            {/* Location count */}
+                            <td className="px-4 py-2">
+                              <span className="text-xs text-slate-500">
+                                {v.forecasts.length} loc{v.forecasts.length !== 1 ? "s" : ""}
                               </span>
                             </td>
-
-                            {/* Next-week demand */}
-                            <td className="px-4 py-2.5 text-right">
-                              <span className="font-semibold text-slate-800">
-                                {f.forecastedDemand.toFixed(1)}
+                            {/* Total demand for this variant */}
+                            <td className="px-4 py-2 text-right">
+                              <span className="font-medium text-slate-700 text-xs">
+                                {variantTotalDemand.toFixed(1)}
                               </span>
-                              <span className="text-slate-400 ml-1">u</span>
+                              <span className="text-slate-400 ml-1 text-xs">u</span>
                             </td>
-
-                            {/* Daily avg */}
-                            <td className="px-4 py-2.5 text-right text-slate-600">
-                              {dailyAvg.toFixed(2)}
+                            {/* Daily avg — not meaningful across locations */}
+                            <td className="px-4 py-2" />
+                            {/* DOS signal */}
+                            <td className="px-4 py-2 text-right">
+                              <DosSignal level={variantDosLevel} min={variantMinDos} />
                             </td>
-
-                            {/* Days of stock */}
-                            <td className="px-4 py-2.5 text-right">
-                              {f.daysOfStock !== null ? (
-                                <span className={`font-medium ${dosColor(f.daysOfStock)}`}>
-                                  {f.daysOfStock}d
-                                </span>
-                              ) : (
-                                <span className="text-slate-300">—</span>
-                              )}
-                            </td>
-
                             {/* Method */}
-                            <td className="px-4 py-2.5 text-center">
-                              <MethodBadge method={f.forecastMethod} />
+                            <td className="px-4 py-2 text-center">
+                              {variantMethod === "Mixed"
+                                ? <span className="text-xs text-slate-400 italic">Mixed</span>
+                                : <MethodBadge method={variantMethod} />}
                             </td>
-
                             {/* Period */}
-                            <td className="px-4 py-2.5 text-xs text-slate-400">
-                              {format(new Date(f.periodStart), "MMM d")} –{" "}
-                              {format(addDays(new Date(f.periodStart), 6), "d")}
+                            <td className="px-4 py-2 text-xs text-slate-400">
+                              {variantPeriod
+                                ? `${format(new Date(variantPeriod), "MMM d")} – ${format(addDays(new Date(variantPeriod), 6), "d")}`
+                                : "—"}
                             </td>
                           </tr>
-                        );
-                      })
-                    )}
+
+                          {/* Location rows — shown when variant is expanded */}
+                          {!isVariantCollapsed &&
+                            v.forecasts.map((f, fi) => {
+                              const dailyAvg = f.forecastedDemand / 7;
+                              return (
+                                <tr
+                                  key={f.locationCode}
+                                  className={`border-b border-slate-100 last:border-0 ${
+                                    fi % 2 === 0 ? "bg-white" : "bg-slate-50/30"
+                                  }`}
+                                >
+                                  {/* Empty variant column (label in header above) */}
+                                  <td className={isSingle ? "px-8 py-2" : "pl-12 pr-4 py-2"} />
+                                  {/* Location code */}
+                                  <td className="px-4 py-2">
+                                    <span className="text-xs font-mono text-slate-600">
+                                      {f.locationCode}
+                                    </span>
+                                  </td>
+                                  {/* Next-week demand */}
+                                  <td className="px-4 py-2 text-right">
+                                    <span className="font-semibold text-slate-800 text-xs">
+                                      {f.forecastedDemand.toFixed(1)}
+                                    </span>
+                                    <span className="text-slate-400 ml-1 text-xs">u</span>
+                                  </td>
+                                  {/* Daily avg */}
+                                  <td className="px-4 py-2 text-right text-slate-600 text-xs">
+                                    {dailyAvg.toFixed(2)}
+                                  </td>
+                                  {/* DOS (individual row — raw value with colour) */}
+                                  <td className="px-4 py-2 text-right">
+                                    {f.daysOfStock !== null ? (
+                                      <span className={`text-xs font-medium ${dosRowColor(f.daysOfStock)}`}>
+                                        {f.daysOfStock}d
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-300 text-xs">—</span>
+                                    )}
+                                  </td>
+                                  {/* Method */}
+                                  <td className="px-4 py-2 text-center">
+                                    <MethodBadge method={f.forecastMethod} />
+                                  </td>
+                                  {/* Period */}
+                                  <td className="px-4 py-2 text-xs text-slate-400">
+                                    {format(new Date(f.periodStart), "MMM d")} –{" "}
+                                    {format(addDays(new Date(f.periodStart), 6), "d")}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </Fragment>
+                      );
+                    })}
                 </Fragment>
               );
             })}

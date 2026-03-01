@@ -437,7 +437,7 @@ Rolle/
 
 ---
 
-### ✅ Phase 6 — Grouping & Navigation (Weeks 18–19)
+### ☐ Phase 6 — Grouping & Navigation (Weeks 18–19)
 *Goal: Make large datasets easier to scan — collapse variants under product headings, add group-by controls, reduce visual noise on the two busiest pages.*
 
 #### Problem statement
@@ -562,7 +562,7 @@ Currently switching the location filter on `/forecasts` navigates to a new URL, 
 
 ---
 
-#### ✅ Phase 6 checklist
+#### Phase 6 checklist
 
 - [x] `InventoryTable.tsx` — group by product: header rows, collapse/expand, group subtotals
 - [x] `InventoryTable.tsx` — collapse-all / expand-all toolbar button
@@ -571,3 +571,7 @@ Currently switching the location filter on `/forecasts` navigates to a new URL, 
 - [x] `ForecastTable.tsx` — group by product: header rows, collapse/expand
 - [x] `ForecastTable.tsx` — collapse-all / expand-all in controls bar
 - [x] Update `forecasts/page.tsx` to pass serialised data to `ForecastTable`
+- [x] `ForecastTable.tsx` — two-level collapse: product header (level 1) → variant headers with locations collapsed by default (level 2) → location rows; single-variant products use one-level collapse directly
+- [x] `ForecastTable.tsx` — DOS signal dot + minimum value on every collapsed row (product header and variant header); `DosSignal` component: red dot (<7d), amber (<14d), green (≥14d), with hover tooltip
+- [x] `InventoryTable.tsx` — stock signal dot on group header label (red = any variant stocked out, amber = any variant ≤3 units); subtotal cells colour-coded: red bg on 0, orange bg on ≤3
+- [ ] Suggestions view — `/suggestions` page where users can submit improvement ideas; form includes platform area selector (dropdown: Inventory, Forecasts, Allocation, Alerts, Reports, Purchase Orders, Transfer Orders, Other), free-text description, and optional priority rating; suggestions stored in DB, visible to ADMIN in a review list

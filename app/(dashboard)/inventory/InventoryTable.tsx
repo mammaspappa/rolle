@@ -272,6 +272,19 @@ export function InventoryTable({ locations, variants, totalVariants }: Props) {
                   ),
                 }));
 
+                // Worst stock signal across all variants × locations in this group
+                const hasStockout = group.rows.some((v) =>
+                  Object.values(v.levels).some((l) => l.qty === 0)
+                );
+                const hasLow = !hasStockout && group.rows.some((v) =>
+                  Object.values(v.levels).some((l) => l.qty > 0 && l.qty <= 3)
+                );
+                const signalDot = hasStockout
+                  ? <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="At least one variant is stocked out at some location" />
+                  : hasLow
+                  ? <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="At least one variant has ≤3 units at some location" />
+                  : null;
+
                 return (
                   <Fragment key={group.key}>
                     {/* Group header — skipped for single-variant groups */}
@@ -289,16 +302,21 @@ export function InventoryTable({ locations, variants, totalVariants }: Props) {
                             <span className="text-xs text-slate-400 font-normal">
                               ({group.rows.length} variants)
                             </span>
+                            {signalDot}
                           </div>
                         </td>
                         {subtotals.map((col) => (
                           <td
                             key={col.id}
-                            className="px-1 py-2 text-center text-slate-500 border-r border-slate-200 font-medium"
+                            className={`px-1 py-2 text-center border-r border-slate-200 font-medium ${
+                              col.total === 0 ? "bg-red-50 text-red-600" :
+                              col.total <= 3  ? "bg-orange-50 text-orange-700" :
+                              "text-slate-500"
+                            }`}
                           >
                             {col.total > 0
                               ? col.total
-                              : <span className="text-slate-300">—</span>}
+                              : <span className="text-red-400 font-semibold">0</span>}
                           </td>
                         ))}
                       </tr>
