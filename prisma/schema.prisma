@@ -151,6 +151,7 @@ model User {
   transferOrdersApproved  TransferOrder[] @relation("TransferApprover")
   purchaseOrdersCreated   PurchaseOrder[] @relation("PurchaseOrderCreator")
   alertsResolved          Alert[]         @relation("AlertResolver")
+  suggestions             Suggestion[]
 }
 
 // ---------------------------------------------------------------------------
@@ -529,4 +530,45 @@ model CategoryCarryingRate {
   category   String   @unique // "Handbag", "Watch", "Shoes", "Jewellery"
   annualRate Decimal  @db.Decimal(5, 4) // e.g. 0.25 = 25%
   updatedAt  DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Suggestions  (user-submitted platform improvement ideas)
+// ---------------------------------------------------------------------------
+
+enum SuggestionArea {
+  INVENTORY
+  FORECASTS
+  ALLOCATION
+  ALERTS
+  REPORTS
+  PURCHASE_ORDERS
+  TRANSFER_ORDERS
+  OTHER
+}
+
+enum SuggestionStatus {
+  OPEN
+  UNDER_REVIEW
+  PLANNED
+  REJECTED
+}
+
+model Suggestion {
+  id          String           @id @default(cuid())
+  area        SuggestionArea
+  title       String
+  description String
+  priority    Int              @default(3) // 1=low 2=medium 3=high 4=critical
+  status      SuggestionStatus @default(OPEN)
+  adminNote   String?          // ADMIN-only response / note
+  submittedById String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  submittedBy User @relation(fields: [submittedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([area])
+  @@index([submittedById])
 }

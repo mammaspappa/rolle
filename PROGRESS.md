@@ -437,7 +437,7 @@ Rolle/
 
 ---
 
-### ☐ Phase 6 — Grouping & Navigation (Weeks 18–19)
+### ✅ Phase 6 — Grouping & Navigation (Weeks 18–19)
 *Goal: Make large datasets easier to scan — collapse variants under product headings, add group-by controls, reduce visual noise on the two busiest pages.*
 
 #### Problem statement
@@ -574,4 +574,4 @@ Currently switching the location filter on `/forecasts` navigates to a new URL, 
 - [x] `ForecastTable.tsx` — two-level collapse: product header (level 1) → variant headers with locations collapsed by default (level 2) → location rows; single-variant products use one-level collapse directly
 - [x] `ForecastTable.tsx` — DOS signal dot + minimum value on every collapsed row (product header and variant header); `DosSignal` component: red dot (<7d), amber (<14d), green (≥14d), with hover tooltip
 - [x] `InventoryTable.tsx` — stock signal dot on group header label (red = any variant stocked out, amber = any variant ≤3 units); subtotal cells colour-coded: red bg on 0, orange bg on ≤3
-- [ ] Suggestions view — `/suggestions` page where users can submit improvement ideas; form includes platform area selector (dropdown: Inventory, Forecasts, Allocation, Alerts, Reports, Purchase Orders, Transfer Orders, Other), free-text description, and optional priority rating; suggestions stored in DB, visible to ADMIN in a review list
+- [x] Suggestions view — `/suggestions` page: `SuggestionForm` client component (area selector, title, description, priority radio group); shows user's own past submissions with status + admin note; sidebar link (Lightbulb icon); `/admin/suggestions` admin review page with area + status filters, priority-sorted list, inline `ReviewForm` per suggestion (status select + admin note textarea); `Suggestion` model in schema with `SuggestionArea` + `SuggestionStatus` enums; migration applied
