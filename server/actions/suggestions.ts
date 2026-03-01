@@ -3,8 +3,47 @@
 import { z } from "zod/v4";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
+import { appendFileSync } from "fs";
+import { join } from "path";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/server/db";
+
+const PRIORITY_LABELS: Record<number, string> = {
+  1: "Low — nice to have",
+  2: "Medium — would improve workflow",
+  3: "High — causes friction regularly",
+  4: "Critical — blocking my work",
+};
+
+function appendSuggestionLog(entry: {
+  area: string;
+  priority: number;
+  title: string;
+  description: string;
+  submitterEmail: string;
+  submitterName?: string | null;
+}) {
+  try {
+    const now = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+    const line = [
+      "================================================================================",
+      `Date:         ${now}`,
+      `Area:         ${entry.area}`,
+      `Priority:     ${PRIORITY_LABELS[entry.priority] ?? entry.priority}`,
+      `Title:        ${entry.title}`,
+      `Submitted by: ${entry.submitterName ?? "Unknown"} <${entry.submitterEmail}>`,
+      "",
+      "Description:",
+      entry.description,
+      "================================================================================",
+      "",
+    ].join("\n");
+
+    appendFileSync(join(process.cwd(), "suggestions.log"), line, "utf8");
+  } catch {
+    // Non-fatal — DB record is the source of truth
+  }
+}
 
 const SuggestionSchema = z.object({
   area: z.enum([
@@ -28,14 +67,24 @@ export async function submitSuggestion(_prev: unknown, formData: FormData) {
   });
   if (!parsed.success) return { error: "Invalid form data" };
 
+  const email = (session.user as { email: string }).email;
   const user = await db.user.findUnique({
-    where: { email: (session.user as { email: string }).email },
-    select: { id: true },
+    where: { email },
+    select: { id: true, name: true },
   });
   if (!user) return { error: "User not found" };
 
   await db.suggestion.create({
     data: { ...parsed.data, submittedById: user.id },
+  });
+
+  appendSuggestionLog({
+    area:          parsed.data.area,
+    priority:      parsed.data.priority,
+    title:         parsed.data.title,
+    description:   parsed.data.description,
+    submitterEmail: email,
+    submitterName: user.name,
   });
 
   revalidatePath("/suggestions");
