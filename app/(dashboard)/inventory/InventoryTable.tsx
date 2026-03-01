@@ -1,8 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import Link from "next/link";
-import { Search, X } from "lucide-react";
+import {
+  Search,
+  X,
+  ChevronRight,
+  ChevronDown,
+  ChevronsDownUp,
+  ChevronsUpDown,
+} from "lucide-react";
 
 export type LocationCol = {
   id: string;
@@ -24,11 +31,56 @@ export type VariantRow = {
   levels: Record<string, { qty: number; inTransit: number }>;
 };
 
+type GroupBy = "product" | "brand" | "category";
+
 function dosColor(qty: number): string {
   if (qty === 0) return "bg-red-100 text-red-700 font-semibold";
   if (qty <= 3) return "bg-orange-100 text-orange-700";
   if (qty <= 10) return "bg-yellow-50 text-yellow-700";
   return "bg-green-50 text-green-700";
+}
+
+function variantAttrs(v: VariantRow): string {
+  return [v.color, v.size].filter(Boolean).join(" · ");
+}
+
+function renderVariantCell(v: VariantRow, groupBy: GroupBy, isSingle: boolean) {
+  const href = `/products/${v.productId}`;
+  const attrs = variantAttrs(v);
+
+  if (isSingle || groupBy === "category") {
+    return (
+      <Link href={href} className="hover:underline">
+        <div className="font-medium text-slate-800">
+          {v.brand} — {v.name}
+        </div>
+        <div className="font-mono text-slate-400 mt-0.5">
+          {v.sku}
+          {attrs && <span className="ml-1">· {attrs}</span>}
+        </div>
+      </Link>
+    );
+  }
+
+  if (groupBy === "brand") {
+    return (
+      <Link href={href} className="hover:underline">
+        <div className="font-medium text-slate-800">{v.name}</div>
+        <div className="font-mono text-slate-400 mt-0.5">
+          {v.sku}
+          {attrs && <span className="ml-1">· {attrs}</span>}
+        </div>
+      </Link>
+    );
+  }
+
+  // groupBy === "product": brand + name shown in header row
+  return (
+    <Link href={href} className="hover:underline">
+      <div className="font-mono text-slate-500">{v.sku}</div>
+      {attrs && <div className="text-slate-400 mt-0.5">{attrs}</div>}
+    </Link>
+  );
 }
 
 interface Props {
@@ -39,6 +91,8 @@ interface Props {
 
 export function InventoryTable({ locations, variants, totalVariants }: Props) {
   const [query, setQuery] = useState("");
+  const [groupBy, setGroupBy] = useState<GroupBy>("product");
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -54,49 +108,131 @@ export function InventoryTable({ locations, variants, totalVariants }: Props) {
     );
   }, [query, variants]);
 
-  // Column totals use filtered rows only
-  const colTotals = useMemo(() => {
-    return locations.map((loc) => ({
-      id: loc.id,
-      total: filtered.reduce((sum, v) => sum + (v.levels[loc.id]?.qty ?? 0), 0),
-    }));
-  }, [filtered, locations]);
+  const groups = useMemo(() => {
+    const keyOf = (v: VariantRow) =>
+      groupBy === "brand" ? v.brand :
+      groupBy === "category" ? v.category :
+      v.productId;
+
+    const labelOf = (v: VariantRow) =>
+      groupBy === "brand" ? v.brand :
+      groupBy === "category" ? v.category :
+      `${v.brand} — ${v.name}`;
+
+    const map = new Map<string, { key: string; label: string; rows: VariantRow[] }>();
+    for (const v of filtered) {
+      const key = keyOf(v);
+      if (!map.has(key)) map.set(key, { key, label: labelOf(v), rows: [] });
+      map.get(key)!.rows.push(v);
+    }
+    return Array.from(map.values());
+  }, [filtered, groupBy]);
+
+  // Column totals across ALL filtered rows (regardless of collapse state)
+  const colTotals = useMemo(
+    () =>
+      locations.map((loc) => ({
+        id: loc.id,
+        total: filtered.reduce((sum, v) => sum + (v.levels[loc.id]?.qty ?? 0), 0),
+      })),
+    [filtered, locations]
+  );
+
+  const allKeys = useMemo(() => groups.map((g) => g.key), [groups]);
+  const allCollapsed = allKeys.length > 0 && collapsed.size === allKeys.length;
+
+  function toggleGroup(key: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setCollapsed(allCollapsed ? new Set() : new Set(allKeys));
+  }
+
+  function handleSearch(value: string) {
+    setQuery(value);
+    setCollapsed(new Set()); // expand all when searching so matches are visible
+  }
 
   return (
     <div className="space-y-3">
-      {/* Search bar */}
-      <div className="relative max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter by brand, SKU, color…"
-          className="w-full pl-8 pr-8 py-1.5 text-xs border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-slate-300"
-        />
-        {query && (
-          <button
-            onClick={() => setQuery("")}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            aria-label="Clear filter"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder="Filter by brand, SKU, color…"
+            className="pl-8 pr-8 py-1.5 text-xs border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-slate-300 w-56"
+          />
+          {query && (
+            <button
+              onClick={() => handleSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              aria-label="Clear filter"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
 
-      {query && (
-        <p className="text-xs text-slate-500">
-          {filtered.length} of {totalVariants} variant{totalVariants !== 1 ? "s" : ""}
-        </p>
-      )}
+        {/* Group-by toggle */}
+        <div className="flex items-center border border-slate-200 rounded-md bg-white overflow-hidden">
+          <span className="px-2.5 text-xs text-slate-400 border-r border-slate-200 py-1.5 select-none">
+            Group
+          </span>
+          {(["product", "brand", "category"] as GroupBy[]).map((g) => (
+            <button
+              key={g}
+              onClick={() => {
+                setGroupBy(g);
+                setCollapsed(new Set());
+              }}
+              className={`px-2.5 py-1.5 text-xs transition-colors border-r border-slate-200 last:border-0 ${
+                groupBy === g
+                  ? "bg-slate-800 text-white font-medium"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+              }`}
+            >
+              {g.charAt(0).toUpperCase() + g.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Collapse / expand all */}
+        <button
+          onClick={toggleAll}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-md bg-white transition-colors"
+        >
+          {allCollapsed
+            ? <ChevronsUpDown className="w-3.5 h-3.5" />
+            : <ChevronsDownUp className="w-3.5 h-3.5" />}
+          {allCollapsed ? "Expand all" : "Collapse all"}
+        </button>
+
+        {/* Counts */}
+        <span className="text-xs text-slate-500 ml-auto">
+          {groups.length} group{groups.length !== 1 ? "s" : ""}
+          {" · "}
+          {filtered.length}
+          {query ? ` of ${totalVariants}` : ""}{" "}
+          variant{filtered.length !== 1 ? "s" : ""}
+        </span>
+      </div>
 
       {/* Scrollable grid */}
       <div className="overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="text-xs border-collapse min-w-max">
           <thead>
             <tr className="bg-slate-900 text-white">
-              <th className="sticky left-0 z-10 bg-slate-900 text-left px-4 py-3 font-medium min-w-[200px]">
+              <th className="sticky left-0 z-10 bg-slate-900 text-left px-4 py-3 font-medium min-w-[220px]">
                 Product / SKU
               </th>
               {locations.map((loc) => (
@@ -111,6 +247,7 @@ export function InventoryTable({ locations, variants, totalVariants }: Props) {
               ))}
             </tr>
           </thead>
+
           <tbody>
             {filtered.length === 0 ? (
               <tr>
@@ -122,56 +259,92 @@ export function InventoryTable({ locations, variants, totalVariants }: Props) {
                 </td>
               </tr>
             ) : (
-              filtered.map((variant, i) => (
-                <tr
-                  key={variant.id}
-                  className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}
-                >
-                  {/* Product column — sticky */}
-                  <td
-                    className={`sticky left-0 z-10 px-4 py-2 border-r border-slate-200 ${
-                      i % 2 === 0 ? "bg-white" : "bg-slate-50"
-                    }`}
-                  >
-                    <Link href={`/products/${variant.productId}`} className="hover:underline">
-                      <div className="font-medium text-slate-800">
-                        {variant.brand} — {variant.name}
-                      </div>
-                      <div className="text-slate-400 text-xs mt-0.5">
-                        {variant.sku}
-                        {variant.color && (
-                          <span className="ml-1 text-slate-300">· {variant.color}</span>
-                        )}
-                        {variant.size && (
-                          <span className="ml-1 text-slate-300">· {variant.size}</span>
-                        )}
-                      </div>
-                    </Link>
-                  </td>
+              groups.map((group) => {
+                const isCollapsed = collapsed.has(group.key);
+                const isSingle = group.rows.length === 1;
 
-                  {/* Stock cells */}
-                  {locations.map((loc) => {
-                    const level = variant.levels[loc.id];
-                    const qty = level?.qty ?? 0;
-                    const inTransit = level?.inTransit ?? 0;
-                    return (
-                      <td
-                        key={loc.id}
-                        className="px-1 py-2 text-center border-r border-slate-100"
+                // Per-location subtotals for the group header
+                const subtotals = locations.map((loc) => ({
+                  id: loc.id,
+                  total: group.rows.reduce(
+                    (sum, v) => sum + (v.levels[loc.id]?.qty ?? 0),
+                    0
+                  ),
+                }));
+
+                return (
+                  <Fragment key={group.key}>
+                    {/* Group header — skipped for single-variant groups */}
+                    {!isSingle && (
+                      <tr
+                        className="bg-slate-100 border-y border-slate-300 cursor-pointer select-none hover:bg-slate-200 transition-colors"
+                        onClick={() => toggleGroup(group.key)}
                       >
-                        <span
-                          className={`inline-block w-full rounded px-1 py-0.5 text-center ${dosColor(qty)}`}
-                        >
-                          {qty}
-                        </span>
-                        {inTransit > 0 && (
-                          <div className="text-slate-400 mt-0.5">+{inTransit}</div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))
+                        <td className="sticky left-0 z-10 bg-inherit px-3 py-2 border-r border-slate-300">
+                          <div className="flex items-center gap-2">
+                            {isCollapsed
+                              ? <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              : <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                            <span className="font-semibold text-slate-700">{group.label}</span>
+                            <span className="text-xs text-slate-400 font-normal">
+                              ({group.rows.length} variants)
+                            </span>
+                          </div>
+                        </td>
+                        {subtotals.map((col) => (
+                          <td
+                            key={col.id}
+                            className="px-1 py-2 text-center text-slate-500 border-r border-slate-200 font-medium"
+                          >
+                            {col.total > 0
+                              ? col.total
+                              : <span className="text-slate-300">—</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    )}
+
+                    {/* Variant rows — hidden when group is collapsed */}
+                    {(!isCollapsed || isSingle) &&
+                      group.rows.map((variant, i) => {
+                        const stripe = isSingle
+                          ? i % 2 === 0 ? "bg-white" : "bg-slate-50"
+                          : "bg-white";
+                        const indentClass = !isSingle ? "pl-8" : "px-4";
+
+                        return (
+                          <tr key={variant.id} className={`${stripe} hover:bg-blue-50/30`}>
+                            <td
+                              className={`sticky left-0 z-10 ${stripe} ${indentClass} pr-4 py-2 border-r border-slate-200`}
+                            >
+                              {renderVariantCell(variant, groupBy, isSingle)}
+                            </td>
+                            {locations.map((loc) => {
+                              const level = variant.levels[loc.id];
+                              const qty = level?.qty ?? 0;
+                              const inTransit = level?.inTransit ?? 0;
+                              return (
+                                <td
+                                  key={loc.id}
+                                  className="px-1 py-2 text-center border-r border-slate-100"
+                                >
+                                  <span
+                                    className={`inline-block w-full rounded px-1 py-0.5 text-center ${dosColor(qty)}`}
+                                  >
+                                    {qty}
+                                  </span>
+                                  {inTransit > 0 && (
+                                    <div className="text-slate-400 mt-0.5">+{inTransit}</div>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                  </Fragment>
+                );
+              })
             )}
           </tbody>
 

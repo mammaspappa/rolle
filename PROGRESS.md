@@ -437,7 +437,7 @@ Rolle/
 
 ---
 
-### ☐ Phase 6 — Grouping & Navigation (Weeks 18–19)
+### ✅ Phase 6 — Grouping & Navigation (Weeks 18–19)
 *Goal: Make large datasets easier to scan — collapse variants under product headings, add group-by controls, reduce visual noise on the two busiest pages.*
 
 #### Problem statement
@@ -562,12 +562,12 @@ Currently switching the location filter on `/forecasts` navigates to a new URL, 
 
 ---
 
-#### Phase 6 checklist
+#### ✅ Phase 6 checklist
 
-- [ ] `InventoryTable.tsx` — group by product: header rows, collapse/expand, group subtotals
-- [ ] `InventoryTable.tsx` — collapse-all / expand-all toolbar button
-- [ ] `InventoryTable.tsx` — Group-by toggle (product / brand / category)
-- [ ] `ForecastTable.tsx` — new client component extracted from `forecasts/page.tsx`
-- [ ] `ForecastTable.tsx` — group by product: header rows, collapse/expand
-- [ ] `ForecastTable.tsx` — collapse-all / expand-all in controls bar
-- [ ] Update `forecasts/page.tsx` to pass serialised data to `ForecastTable`
+- [x] `InventoryTable.tsx` — group by product: header rows, collapse/expand, group subtotals
+- [x] `InventoryTable.tsx` — collapse-all / expand-all toolbar button
+- [x] `InventoryTable.tsx` — Group-by toggle (product / brand / category)
+- [x] `ForecastTable.tsx` — new client component extracted from `forecasts/page.tsx`
+- [x] `ForecastTable.tsx` — group by product: header rows, collapse/expand
+- [x] `ForecastTable.tsx` — collapse-all / expand-all in controls bar
+- [x] Update `forecasts/page.tsx` to pass serialised data to `ForecastTable`
