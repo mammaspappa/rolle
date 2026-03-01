@@ -48,9 +48,12 @@ async function getDashboardData() {
       where: { isResolved: false },
       orderBy: [{ severity: "asc" }, { createdAt: "desc" }],
       take: 6,
-      include: {
-        productVariant: { include: { product: { select: { name: true, brand: true } } } },
-        location: { select: { name: true, code: true } },
+      select: {
+        id: true,
+        type: true,
+        severity: true,
+        message: true,
+        location: { select: { code: true } },
       },
     }),
     getKPISummary(),

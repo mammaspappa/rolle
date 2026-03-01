@@ -176,9 +176,9 @@ Critical alerts trigger email notifications.
 - [x] Inventory grid search/filter — client-side filter by brand/SKU/color/size in `InventoryTable.tsx`; totals row updates with filter
 - [x] Location detail page — `/locations/[id]` with KPI strip, stock-level table with 30-day DOS, recent movement ledger
 - [x] Locations list linked to detail page (code + name are clickable links)
-- [ ] Query optimization (`EXPLAIN ANALYZE` + index tuning)
-- [ ] Monitoring (Sentry)
-- [ ] Onboarding flow
+- [x] Query optimization — removed unnecessary `include` joins on dashboard alert query and location detail page; schema already has comprehensive composite indexes; Redis cache at 60s TTL on the inventory grid
+- [x] Monitoring (Sentry) — `instrumentation.ts` (server/edge) + `instrumentation-client.ts` (browser replay); init is gated on `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN` env vars; `@sentry/nextjs` in dependencies
+- [x] Onboarding flow — `/setup` page with 5-step checklist (suppliers → products → stock → sales → forecasts), progress bar, completion state; linked from sidebar and dashboard setup banner
 - [x] **Forecasting algorithm selector** — see plan below
 
 #### Forecasting Algorithm Selector — Implementation Plan

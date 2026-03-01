@@ -27,7 +27,10 @@ async function getLocation(id: string) {
       inventoryLevels: {
         include: {
           productVariant: {
-            include: {
+            select: {
+              productId: true,
+              sku: true,
+              color: true,
               product: { select: { name: true, brand: true, category: true, retailPrice: true } },
             },
           },
@@ -45,9 +48,17 @@ async function getRecentMovements(locationId: string) {
     },
     orderBy: { occurredAt: "desc" },
     take: 20,
-    include: {
+    select: {
+      id: true,
+      type: true,
+      quantity: true,
+      occurredAt: true,
+      fromLocationId: true,
       productVariant: {
-        include: { product: { select: { name: true, brand: true } } },
+        select: {
+          sku: true,
+          product: { select: { brand: true } },
+        },
       },
       performedBy: { select: { name: true } },
     },
